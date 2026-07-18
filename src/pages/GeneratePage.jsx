@@ -4,11 +4,13 @@ import { ProgressPanel } from '../components/generation/ProgressPanel.jsx';
 import { ResultsTable } from '../components/preview/ResultsTable.jsx';
 import { ErrorAlert } from '../components/shared/ErrorAlert.jsx';
 import { exportToExcel } from '../services/excel/exporter.js';
-import { Download, AlertTriangle } from 'lucide-react';
+import { Download, AlertTriangle, Send } from 'lucide-react';
+import { useWhatsApp } from '../hooks/useWhatsApp.js';
 
-export function GeneratePage({ excel, settings, generation }) {
+export function GeneratePage({ excel, settings, generation, onNext }) {
   const { rows, columnMap } = excel;
   const { settings: appSettings, updateMessageSettings } = settings;
+  const { enqueue } = useWhatsApp();
   const {
     state, results, successResults, progress, batchError,
     isRunning, isDone, isIdle,
@@ -59,6 +61,12 @@ export function GeneratePage({ excel, settings, generation }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-secondary"
+            onClick={onNext}
+          >
+            Go to WhatsApp
+          </button>
           <button
             className="btn btn-secondary"
             onClick={handleExport}
@@ -117,12 +125,37 @@ export function GeneratePage({ excel, settings, generation }) {
         {results.length > 0 && (
           <div className="card">
             <div className="card-body" style={{ padding: 20 }}>
-              <h3 className="font-semibold" style={{ fontSize: 14, marginBottom: 16 }}>Personalized Messages</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 className="font-semibold" style={{ fontSize: 14 }}>Personalized Messages</h3>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    enqueue(successResults.map(r => ({
+                      leadId: r.id,
+                      businessName: r.businessName,
+                      phoneNumber: r.phone,
+                      message: r.message
+                    })));
+                    onNext();
+                  }}
+                  disabled={successResults.length === 0}
+                >
+                  <Send size={13} style={{ marginRight: 4 }} /> Queue All {successResults.length > 0 ? `(${successResults.length})` : ''}
+                </button>
+              </div>
               <ResultsTable
                 results={results}
                 onRegenerate={handleRegenerate}
                 onEdit={editRow}
                 isRunning={isRunning}
+                onQueue={(row) => {
+                  enqueue([{
+                    leadId: row.id,
+                    businessName: row.businessName,
+                    phoneNumber: row.phone,
+                    message: row.message
+                  }]);
+                }}
               />
             </div>
           </div>

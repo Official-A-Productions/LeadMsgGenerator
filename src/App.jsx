@@ -3,6 +3,7 @@ import { QueryProvider } from './providers/QueryProvider.jsx';
 import { HomePage } from './pages/HomePage.jsx';
 import { GeneratePage } from './pages/GeneratePage.jsx';
 import { SettingsPage } from './pages/SettingsPage.jsx';
+import { WhatsAppPage } from './pages/WhatsAppPage.jsx';
 import { useSettings } from './hooks/useSettings.js';
 import { useExcel } from './hooks/useExcel.js';
 import { useBatchGeneration } from './hooks/useBatchGeneration.js';
@@ -10,6 +11,7 @@ import { useBatchGeneration } from './hooks/useBatchGeneration.js';
 const TABS = [
   { id: 'upload',   label: 'Upload' },
   { id: 'generate', label: 'Generate' },
+  { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -37,7 +39,8 @@ export default function App() {
       </nav>
 
       {activeTab === 'upload'   && <HomePage   excel={excel}   onNext={() => setActiveTab('generate')} />}
-      {activeTab === 'generate' && <GeneratePage excel={excel} settings={settings} generation={generation} />}
+      {activeTab === 'generate' && <GeneratePage excel={excel} settings={settings} generation={generation} onNext={() => setActiveTab('whatsapp')} />}
+      {activeTab === 'whatsapp' && <WhatsAppPage />}
       {activeTab === 'settings' && <SettingsPage settings={settings} />}
     </QueryProvider>
   );

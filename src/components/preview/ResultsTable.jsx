@@ -4,7 +4,7 @@ import { StatusBadge } from '../shared/StatusBadge.jsx';
 import { MessageEditor } from './MessageEditor.jsx';
 import { ROW_STATUS } from '../../constants/providers.js';
 
-export function ResultsTable({ results, onRegenerate, onEdit, isRunning }) {
+export function ResultsTable({ results, onRegenerate, onEdit, isRunning, onQueue }) {
   const [search, setSearch] = useState('');
   const [editingRow, setEditingRow] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -86,6 +86,16 @@ export function ResultsTable({ results, onRegenerate, onEdit, isRunning }) {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                     {row.status === ROW_STATUS.SUCCESS && (
                       <>
+                        {onQueue && (
+                          <button
+                            onClick={() => onQueue(row)}
+                            className="btn btn-ghost btn-sm"
+                            title="Queue for WhatsApp"
+                            style={{ fontSize: 11, padding: '2px 8px', marginRight: 4 }}
+                          >
+                            Queue
+                          </button>
+                        )}
                         <button
                           onClick={() => handleCopy(row)}
                           className="btn btn-ghost btn-icon btn-sm"
