@@ -164,3 +164,26 @@ npm run dev
 - **Queue is stuck on Pending**: Ensure the Node backend is running and the Playwright window is authenticated. If the window is closed, restart the backend server.
 - **"Invalid Phone Number" errors**: Ensure the Excel sheet contains phone numbers. The system uses `libphonenumber-js` and defaults to India (`IN` / `+91`) if country codes are missing. You can change this in the `.env` file.
 - **Browser crashing on startup**: Ensure you have run `npx playwright install chromium` inside the `whatsapp-server` folder.
+
+---
+
+##  Production Readiness & Crash Recovery
+
+This system is built with safeguards for real-world production environments where network drops or browser crashes are expected.
+
+### Crash Recovery
+If your computer dies, the Node server crashes, or the Playwright browser is force-closed mid-send, the current lead being processed remains marked as `SENDING` in the queue database. 
+- **Self-Healing**: The next time you click **Start Queue**, the backend automatically scans for any jobs stuck in `SENDING` and safely resets them to `RETRY_PENDING`. No leads are lost.
+
+### Duplicate Prevention (`ALREADY_SENT`)
+- Every time a message successfully sends, it writes an immutable record to `whatsapp-server/data/delivery-log.jsonl`.
+- Before the sender even opens a WhatsApp chat for a new job, it scans this delivery log. If it finds the `leadId` has already successfully received a message in the past, it aborts the send and marks the job as `ALREADY_SENT`.
+- This ensures you never accidentally double-message a lead, even if you re-upload the same Excel sheet weeks later.
+
+### ⚠️ Pre-Flight Checklist for Live Production
+
+Before you switch off Test Mode and run a real campaign, follow these rules:
+
+1. **Disable Test Mode**: Change `WHATSAPP_TEST_MODE=true` to `false` in your `.env` file and restart the backend server.
+2. **Use a Dedicated Number**: Never use your personal WhatsApp number for automated cold outreach. If your throttling limits are too aggressive and WhatsApp flags the account, it will be banned. Purchase a separate SIM dedicated strictly to this automation engine.
+3. **Warm Up the Account**: Do not start by sending 100 messages on day one. For the first week, use the UI Throttling Settings to send very small batches (e.g., 5-10 messages a day) with long random delays. Once WhatsApp's algorithms establish trust with the new number, you can slowly scale up your batch limits.
