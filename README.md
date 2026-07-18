@@ -20,7 +20,7 @@ The architecture is split into a React Frontend (SPA) for the user interface and
 
 ```mermaid
 graph TD
-    subgraph Frontend [React SPA (Vite)]
+    subgraph Frontend [React SPA]
         UI[User Interface]
         AI_Engine[AI Generation Engine]
         Settings[Local Storage Settings]
@@ -31,7 +31,7 @@ graph TD
         AI_Engine <-->|REST API| External_AI[Gemini / Groq API]
     end
 
-    subgraph Backend [Node.js WhatsApp Server]
+    subgraph Backend [Node.js Server]
         API[Express Router]
         Queue[Queue Manager]
         Playwright[Browser Manager]
