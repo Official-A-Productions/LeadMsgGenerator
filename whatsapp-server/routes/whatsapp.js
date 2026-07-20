@@ -46,17 +46,21 @@ whatsappRouter.patch('/queue/:id', (req, res) => {
   const { id } = req.params;
   const { action } = req.body;
   
-  let job = queueManager.getAll().find(j => j.id === id);
+  // Support both id and leadId for backwards compatibility
+  let job = queueManager.getAll().find(j => j.id === id || j.leadId === id);
   if (!job) return res.status(404).json({ error: 'Job not found' });
   
+  const jobId = job.id || job.leadId; // use whatever key the job actually has
+
   if (action === 'cancel') {
-    job = queueManager.updateJob(id, { status: 'CANCELLED' });
+    job = queueManager.updateJob(jobId, { status: 'CANCELLED' });
   } else if (action === 'retry') {
-    job = queueManager.updateJob(id, { status: 'RETRY_PENDING', attempts: 0, lastError: null });
+    job = queueManager.updateJob(jobId, { status: 'RETRY_PENDING', attempts: 0, lastError: null });
   }
   
   res.json(job);
 });
+
 
 whatsappRouter.post('/queue/start', (req, res) => {
   queueProcessor.start();
@@ -70,4 +74,16 @@ whatsappRouter.post('/queue/pause', (req, res) => {
 
 whatsappRouter.get('/history', (req, res) => {
   res.json(deliveryLogger.getHistory());
+});
+
+// Remove completed/cancelled/failed jobs from queue
+whatsappRouter.delete('/queue/completed', (req, res) => {
+  const remaining = queueManager.clearCompleted();
+  res.json({ remaining });
+});
+
+// Wipe the entire queue
+whatsappRouter.delete('/queue/all', (req, res) => {
+  queueManager.purgeAll();
+  res.json({ cleared: true });
 });

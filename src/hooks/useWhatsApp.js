@@ -77,6 +77,18 @@ export function useWhatsApp() {
     setSettings(updated);
   };
 
+  const clearCompleted = async () => {
+    await api.clearCompleted();
+    refreshQueue();
+    refreshStatus();
+  };
+
+  const purgeAll = async () => {
+    await api.purgeAll();
+    refreshQueue();
+    refreshStatus();
+  };
+
   return {
     status,
     queue,
@@ -87,6 +99,8 @@ export function useWhatsApp() {
     pause,
     cancelJob,
     retryJob,
-    updateSettings
+    updateSettings,
+    clearCompleted,
+    purgeAll
   };
 }

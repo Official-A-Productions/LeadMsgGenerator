@@ -85,7 +85,7 @@ class QueueProcessor {
       if (result.errorCode === 'ALREADY_SENT') finalStatus = 'ALREADY_SENT';
       else if (result.errorCode === 'INVALID_NUMBER') finalStatus = 'INVALID_NUMBER';
 
-      queueManager.updateJob(job.id, {
+      queueManager.updateJob(job.leadId || job.id, {
         status: finalStatus,
         lastError: result.error || null,
         attempts: job.attempts + 1

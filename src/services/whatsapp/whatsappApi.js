@@ -65,3 +65,15 @@ export async function fetchHistory() {
   if (!res.ok) throw new Error('Failed to fetch history');
   return res.json();
 }
+
+export async function clearCompleted() {
+  const res = await fetch(`${API_URL}/queue/completed`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to clear completed jobs');
+  return res.json();
+}
+
+export async function purgeAll() {
+  const res = await fetch(`${API_URL}/queue/all`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to purge queue');
+  return res.json();
+}

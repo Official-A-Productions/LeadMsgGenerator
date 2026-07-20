@@ -1,9 +1,9 @@
 import { useWhatsApp } from '../hooks/useWhatsApp.js';
-import { Play, Pause, RefreshCw, XCircle, AlertTriangle } from 'lucide-react';
+import { Play, Pause, RefreshCw, XCircle, AlertTriangle, Trash2 } from 'lucide-react';
 import { StatusBadge } from '../components/shared/StatusBadge.jsx';
 
 export function WhatsAppPage() {
-  const { status, queue, error, start, pause, cancelJob, retryJob } = useWhatsApp();
+  const { status, queue, settings, error, start, pause, cancelJob, retryJob, updateSettings, clearCompleted, purgeAll } = useWhatsApp();
 
   if (error) {
     return (
@@ -31,6 +31,16 @@ export function WhatsAppPage() {
             <button className="btn btn-warning" onClick={pause}><Pause size={14} /> Pause Queue</button>
           ) : (
             <button className="btn btn-primary" onClick={start} disabled={authStatus !== 'AUTHENTICATED'}><Play size={14} /> Start Queue</button>
+          )}
+          {queue.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={clearCompleted} title="Remove sent, cancelled & failed jobs">
+              <Trash2 size={14} /> Clear Completed
+            </button>
+          )}
+          {queue.length > 0 && !processorRunning && (
+            <button className="btn btn-ghost btn-sm" style={{ color: '#c00' }} onClick={() => { if (confirm('Clear entire queue?')) purgeAll(); }} title="Wipe all jobs">
+              <Trash2 size={14} /> Clear All
+            </button>
           )}
         </div>
       </div>
@@ -129,10 +139,10 @@ export function WhatsAppPage() {
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {['QUEUED', 'PENDING', 'RETRY_PENDING'].includes(job.status) && (
-                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => cancelJob(job.id)} title="Cancel"><XCircle size={13}/></button>
+                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => cancelJob(job.leadId || job.id)} title="Cancel"><XCircle size={13}/></button>
                           )}
                           {job.status === 'FAILED' && (
-                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => retryJob(job.id)} title="Retry"><RefreshCw size={13}/></button>
+                            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => retryJob(job.leadId || job.id)} title="Retry"><RefreshCw size={13}/></button>
                           )}
                         </div>
                       </td>

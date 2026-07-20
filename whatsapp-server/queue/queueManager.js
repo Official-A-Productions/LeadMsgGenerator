@@ -68,6 +68,7 @@ class QueueManager {
       if (!queue.find(j => j.leadId === newJob.leadId)) {
         queue.push({
           ...newJob,
+          id: newJob.id || newJob.leadId, // ensure id field exists for PATCH lookups
           status: 'QUEUED',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -100,7 +101,7 @@ class QueueManager {
 
   updateJob(id, patch) {
     const queue = this._readQueue();
-    const jobIndex = queue.findIndex(j => j.id === id);
+    const jobIndex = queue.findIndex(j => j.id === id || j.leadId === id);
     if (jobIndex >= 0) {
       queue[jobIndex] = {
         ...queue[jobIndex],
@@ -112,6 +113,7 @@ class QueueManager {
     }
     return null;
   }
+
 
   resetSendingJobs() {
     const queue = this._readQueue();
@@ -125,6 +127,20 @@ class QueueManager {
     if (updated) {
       this._writeQueue(queue);
     }
+  }
+
+  // Remove all finished jobs (SENT, CANCELLED, FAILED, etc.)
+  clearCompleted() {
+    const active = this._readQueue().filter(j =>
+      ['QUEUED', 'RETRY_PENDING', 'SENDING'].includes(j.status)
+    );
+    this._writeQueue(active);
+    return active.length;
+  }
+
+  // Wipe the entire queue
+  purgeAll() {
+    this._writeQueue([]);
   }
 }
 

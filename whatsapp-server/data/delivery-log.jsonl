@@ -1,0 +1,8 @@
+{"leadId":"0ea0d652-203a-44fc-a999-198edd27511c","phoneNumber":"+918448706024","status":"sent","timestamp":"2026-07-20T17:22:27.868Z"}
+{"leadId":"40351b6b-ed2c-4d8b-942e-2b2e9513a664","phoneNumber":"+917011863622","status":"failed","errorCode":"INVALID_NUMBER","error":"Number not on WhatsApp or invalid","timestamp":"2026-07-20T17:23:01.907Z"}
+{"leadId":"57876084-ae97-4f87-8bed-a4d88705e857","phoneNumber":"+918448706024","status":"sent","timestamp":"2026-07-20T17:23:28.844Z"}
+{"leadId":"690ab229-c1ac-4fe0-81d8-83ec73cbc1dc","phoneNumber":"+917011863622","status":"sent","timestamp":"2026-07-20T17:23:53.686Z"}
+{"leadId":"40351b6b-ed2c-4d8b-942e-2b2e9513a664","phoneNumber":"+917011863622","status":"failed","errorCode":"UNKNOWN_ERROR","error":"page.goto: Target page, context or browser has been closed","timestamp":"2026-07-20T17:29:00.974Z"}
+{"leadId":"40351b6b-ed2c-4d8b-942e-2b2e9513a664","phoneNumber":"+917011863622","status":"failed","errorCode":"UNKNOWN_ERROR","error":"page.goto: Target page, context or browser has been closed","timestamp":"2026-07-20T17:30:43.630Z"}
+{"leadId":"40351b6b-ed2c-4d8b-942e-2b2e9513a664","phoneNumber":"+917011863622","status":"failed","errorCode":"UNKNOWN_ERROR","error":"page.goto: Target page, context or browser has been closed","timestamp":"2026-07-20T17:31:03.650Z"}
+{"leadId":"40351b6b-ed2c-4d8b-942e-2b2e9513a664","phoneNumber":"+917011863622","status":"failed","errorCode":"UNKNOWN_ERROR","error":"page.goto: Target page, context or browser has been closed","timestamp":"2026-07-20T17:36:11.969Z"}
