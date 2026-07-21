@@ -18,11 +18,13 @@ class QueueProcessor {
     this.sleepUntil = null;
     this.testMode = process.env.WHATSAPP_TEST_MODE === 'true';
     this.messagesSentInCurrentBatch = 0;
+    this.currentActivity = 'Idle';
   }
 
   start() {
     if (this.isRunning) return;
     this.isRunning = true;
+    this.currentActivity = 'Starting queue...';
     
     // Reset any SENDING jobs from a previous crash
     queueManager.resetSendingJobs();
@@ -34,6 +36,7 @@ class QueueProcessor {
     this.isRunning = false;
     this.isSleeping = false;
     this.sleepUntil = null;
+    this.currentActivity = 'Paused';
   }
 
   async _processNext() {
@@ -42,7 +45,6 @@ class QueueProcessor {
     this.isProcessing = true;
     
     try {
-      // Check if we need to take a batch break
       const settings = settingsManager.getSettings();
       
       if (this.messagesSentInCurrentBatch >= settings.batchSize) {
@@ -50,9 +52,10 @@ class QueueProcessor {
         const sleepMs = settings.batchDelayMin * 60 * 1000;
         this.sleepUntil = Date.now() + sleepMs;
         
-        console.log(`Batch size of ${settings.batchSize} reached. Sleeping for ${settings.batchDelayMin} minutes.`);
+        const msg = `Batch limit (${settings.batchSize}) reached. Taking a break for ${settings.batchDelayMin} mins.`;
+        console.log(`[QueueProcessor] ${msg}`);
+        this.currentActivity = msg;
         
-        // Wait in small increments so we can still be paused
         const checkIntervalMs = 5000;
         while (this.isRunning && Date.now() < this.sleepUntil) {
           await wait(checkIntervalMs);
@@ -63,6 +66,7 @@ class QueueProcessor {
         this.messagesSentInCurrentBatch = 0;
         
         if (!this.isRunning) {
+          this.currentActivity = 'Paused';
           this.isProcessing = false;
           return;
         }
@@ -71,16 +75,20 @@ class QueueProcessor {
       const job = queueManager.dequeueNext();
       
       if (!job) {
-        this.isRunning = false; // Stop if nothing to process
+        console.log('[QueueProcessor] No pending jobs in queue. Stopping queue.');
+        this.isRunning = false;
+        this.currentActivity = 'Queue completed';
         this.isProcessing = false;
         return;
       }
+
+      this.currentActivity = `Sending to ${job.businessName || job.phoneNumber}...`;
+      console.log(`[QueueProcessor] ${this.currentActivity}`);
       
       const result = await messageSender.send(job, this.testMode);
       
-      // Update job based on result
       let finalStatus = result.status === 'sent' ? 'SENT' : 'FAILED';
-      if (result.status === 'test_ready') finalStatus = 'SENT'; // for testing purposes
+      if (result.status === 'test_ready') finalStatus = 'SENT';
       
       if (result.errorCode === 'ALREADY_SENT') finalStatus = 'ALREADY_SENT';
       else if (result.errorCode === 'INVALID_NUMBER') finalStatus = 'INVALID_NUMBER';
@@ -93,23 +101,25 @@ class QueueProcessor {
 
       this.messagesSentInCurrentBatch++;
 
-      // Wait a random delay between messages if there are more jobs queued
+      // Wait random delay between messages if more jobs remain
       if (this.isRunning && queueManager.getStats().pending > 0 && this.messagesSentInCurrentBatch < settings.batchSize) {
-         const delaySec = getRandomInt(settings.minDelaySec, settings.maxDelaySec);
-         console.log(`Waiting ${delaySec}s before next message...`);
-         
-         const delayUntil = Date.now() + (delaySec * 1000);
-         while (this.isRunning && Date.now() < delayUntil) {
-            await wait(1000);
-         }
+        const delaySec = getRandomInt(settings.minDelaySec, settings.maxDelaySec);
+        const delayMsg = `Message dispatched. Delaying ${delaySec}s before next...`;
+        console.log(`[QueueProcessor] ${delayMsg}`);
+        this.currentActivity = delayMsg;
+        
+        const delayUntil = Date.now() + (delaySec * 1000);
+        while (this.isRunning && Date.now() < delayUntil) {
+          await wait(1000);
+        }
       }
 
     } catch (e) {
-      console.error('Unexpected error in queue processor:', e);
+      console.error('[QueueProcessor] Unexpected error:', e);
+      this.currentActivity = `Error: ${e.message}`;
     } finally {
       this.isProcessing = false;
       
-      // Proceed to next
       if (this.isRunning) {
         setTimeout(() => this._processNext(), 1000);
       }

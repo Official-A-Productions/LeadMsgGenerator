@@ -5,8 +5,8 @@ import { buildPrompt } from '../prompt/builder.js';
 import { ROW_STATUS } from '../../constants/providers.js';
 import { sleep } from '../ai/retryStrategy.js';
 
-// Minimum gap between requests (ms). Free-tier Gemini = 15 req/min → 4s per request.
-const REQUEST_GAP_MS = 4000;
+// Minimum gap between requests (ms). 10s per request to strictly prevent rate limits.
+const REQUEST_GAP_MS = 10000;
 
 // On a 429, wait this long before continuing to the next row.
 const RATE_LIMIT_BACKOFF_MS = 65000;

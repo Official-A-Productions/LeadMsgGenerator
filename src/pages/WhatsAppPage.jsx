@@ -60,6 +60,13 @@ export function WhatsAppPage() {
           </div>
         )}
 
+        {processorRunning && status?.currentActivity && (
+          <div className="alert alert-info" style={{ backgroundColor: '#f0f4fe', borderColor: '#d2e3fc', color: '#1a73e8' }}>
+            <span className="alert-icon">⚡</span>
+            <span className="text-sm font-semibold">Live Server Activity: {status.currentActivity}</span>
+          </div>
+        )}
+
         {status?.isSleeping && (
           <div className="alert alert-info" style={{ backgroundColor: '#e8f0fe', borderColor: '#d2e3fc', color: '#1967d2' }}>
             <span className="alert-icon">⏳</span>

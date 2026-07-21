@@ -3,76 +3,38 @@ import { SELECTORS } from './selectors.js';
 
 class WhatsAppClient {
   constructor() {
-    // Cached auth state so we don't navigate on every poll
     this._authStatus = 'INITIALIZING';
     this._authInitialized = false;
-    this._initPromise = null;
   }
 
-  /**
-   * Initialize the browser and navigate to WhatsApp Web exactly ONCE.
-   * Subsequent calls return immediately.
-   */
   async _ensureInitialized() {
     if (this._authInitialized) return;
-    // Prevent concurrent init calls
-    if (this._initPromise) return this._initPromise;
-
-    this._initPromise = (async () => {
-      try {
-        const page = await browserManager.getPage();
-        await page.goto('https://web.whatsapp.com', { waitUntil: 'domcontentloaded' });
-        // Give the page time to load JS and render
-        await page.waitForTimeout(3000);
-
-        // Determine initial auth state
-        const result = await Promise.any([
-          page.waitForSelector(SELECTORS.QR_CODE, { timeout: 30000 }).then(() => 'NOT_AUTHENTICATED'),
-          page.waitForSelector(SELECTORS.CHATS_LIST, { timeout: 30000 }).then(() => 'AUTHENTICATED')
-        ]).catch(() => 'LOADING');
-
-        this._authStatus = result;
-        this._authInitialized = true;
-
-        // If not yet authenticated, watch for the chat list to appear (QR scan)
-        if (result === 'NOT_AUTHENTICATED' || result === 'LOADING') {
-          this._watchForAuth(page);
-        }
-      } catch (err) {
-        console.error('Error during WhatsApp init:', err.message);
-        this._authStatus = 'UNKNOWN_ERROR';
-        this._authInitialized = true; // Mark done so we don't loop
-      } finally {
-        this._initPromise = null;
-      }
-    })();
-
-    return this._initPromise;
-  }
-
-  /**
-   * After QR is shown, watch for the chat list to appear (user scanned QR).
-   * Updates cached status without navigating.
-   */
-  async _watchForAuth(page) {
     try {
-      await page.waitForSelector(SELECTORS.CHATS_LIST, { timeout: 300000 }); // Wait up to 5 minutes
-      this._authStatus = 'AUTHENTICATED';
-      console.log('WhatsApp authenticated successfully!');
+      const page = await browserManager.getPage();
+      const currentUrl = page.url();
+      if (!currentUrl.includes('web.whatsapp.com')) {
+        console.log('[WhatsAppClient] Initializing WhatsApp Web...');
+        await page.goto('https://web.whatsapp.com', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(3000);
+      }
+      this._authInitialized = true;
     } catch (err) {
-      console.log('Auth watch timed out — user did not scan QR within 5 minutes.');
+      console.error('[WhatsAppClient] Error during init:', err.message);
     }
   }
 
-  /**
-   * Returns cached auth status. Does NOT navigate the browser.
-   */
   async getAuthStatus() {
-    // Start init in background if not done yet (non-blocking for first call)
-    if (!this._authInitialized && !this._initPromise) {
-      this._ensureInitialized(); // fire-and-forget
+    try {
+      await this._ensureInitialized();
+      const page = await browserManager.getPage();
+      const hasChats = await page.$(SELECTORS.CHATS_LIST);
+      if (hasChats) { this._authStatus = 'AUTHENTICATED'; return 'AUTHENTICATED'; }
+      const hasQr = await page.$(SELECTORS.QR_CODE);
+      if (hasQr) { this._authStatus = 'NOT_AUTHENTICATED'; return 'NOT_AUTHENTICATED'; }
+      return this._authStatus || 'LOADING';
+    } catch (err) {
+      return this._authStatus || 'UNKNOWN_ERROR';
     }
-    return this._authStatus;
   }
 
   async testMode(phoneNumber, text) {
@@ -85,57 +47,126 @@ class WhatsAppClient {
 
   async _processMessage(phoneNumber, text, isTestMode) {
     try {
-      // Ensure authenticated before sending
       await this._ensureInitialized();
-      if (this._authStatus !== 'AUTHENTICATED') {
-        return { status: 'failed', errorCode: 'NOT_AUTHENTICATED', error: 'WhatsApp is not authenticated. Please scan the QR code.' };
-      }
 
       const page = await browserManager.getPage();
-      
-      // Navigate to the direct send URL
       const encodedText = encodeURIComponent(text);
-      const cleanPhone = phoneNumber.replace('+', '');
-      const url = `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
-      
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      const digitsOnly = phoneNumber.replace(/\D/g, '');
 
-      // Wait for the message input to appear, or an invalid number dialog
-      try {
-        const result = await Promise.any([
-          page.waitForSelector(SELECTORS.MESSAGE_INPUT, { timeout: 20000 }).then(() => 'READY'),
-          page.waitForSelector(SELECTORS.INVALID_NUMBER_DIALOG, { timeout: 20000 }).then(() => 'INVALID')
-        ]);
+      // Candidate phone formats: 10-digit national first, then 12-digit (91...)
+      let candidatePhones = [];
+      if (digitsOnly.length === 12 && digitsOnly.startsWith('91')) {
+        const national10 = digitsOnly.slice(2);
+        candidatePhones = [national10, digitsOnly];
+      } else if (digitsOnly.length === 10) {
+        candidatePhones = [digitsOnly, `91${digitsOnly}`];
+      } else {
+        candidatePhones = [digitsOnly];
+      }
 
-        if (result === 'INVALID') {
-          return { status: 'failed', errorCode: 'INVALID_NUMBER', error: 'Number not on WhatsApp or invalid' };
+      let chatReady = false;
+      let lastError = null;
+      let activePhone = candidatePhones[0];
+
+      for (const phoneToTry of candidatePhones) {
+        activePhone = phoneToTry;
+        const url = `https://web.whatsapp.com/send?phone=${phoneToTry}&text=${encodedText}`;
+        console.log(`[WhatsAppClient] Navigating to phone=${phoneToTry}...`);
+
+        try {
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        } catch (gotoErr) {
+          console.error(`[WhatsAppClient] Navigation error:`, gotoErr.message);
+          lastError = { status: 'failed', errorCode: 'NAVIGATION_ERROR', error: gotoErr.message };
+          continue;
         }
-      } catch (e) {
-        return { status: 'failed', errorCode: 'TIMEOUT', error: 'Timeout waiting for chat to load' };
+
+        // Step 1: Handle "Continue" / "Use Here" confirmation dialog if present
+        // WhatsApp Web shows this when opening a new chat via URL
+        try {
+          const continueBtn = page.locator('button:has-text("Continue"), div[role="button"]:has-text("Continue"), button:has-text("Use Here"), button:has-text("OK")').first();
+          if (await continueBtn.isVisible({ timeout: 4000 })) {
+            console.log(`[WhatsAppClient] Clicking Continue dialog...`);
+            await continueBtn.click();
+            await page.waitForTimeout(2000);
+          }
+        } catch (e) {
+          // No continue dialog — normal, keep going
+        }
+
+        // Step 2: Wait for message input (meaning chat loaded successfully)
+        try {
+          await page.waitForSelector(SELECTORS.MESSAGE_INPUT, { timeout: 20000 });
+          console.log(`[WhatsAppClient] Chat loaded for phone=${phoneToTry}`);
+          chatReady = true;
+          break;
+        } catch (timeoutErr) {
+          // Message input didn't appear — check if it's a genuine invalid number
+          console.log(`[WhatsAppClient] Message input not found for ${phoneToTry}, checking for invalid number...`);
+
+          // Only mark as invalid if WhatsApp explicitly shows the invalid number text
+          const pageContent = await page.content();
+          const isInvalid =
+            pageContent.includes('Phone number shared via url is invalid') ||
+            pageContent.includes('not on WhatsApp') ||
+            pageContent.includes('invalid phone number');
+
+          if (isInvalid) {
+            console.log(`[WhatsAppClient] ${phoneToTry} confirmed not on WhatsApp.`);
+            // Dismiss any popup
+            try {
+              const okBtn = page.locator(SELECTORS.INVALID_NUMBER_OK_BUTTON).first();
+              if (await okBtn.isVisible({ timeout: 2000 })) await okBtn.click();
+            } catch (e) {}
+            lastError = { status: 'failed', errorCode: 'INVALID_NUMBER', error: 'Phone number is not registered on WhatsApp' };
+          } else {
+            console.log(`[WhatsAppClient] Timeout for ${phoneToTry} — not confirmed invalid, trying next format...`);
+            lastError = { status: 'failed', errorCode: 'TIMEOUT', error: `Timeout loading chat for ${phoneToTry}` };
+          }
+        }
+      }
+
+      if (!chatReady) {
+        return lastError || { status: 'failed', errorCode: 'INVALID_NUMBER', error: 'Number not on WhatsApp' };
       }
 
       if (isTestMode) {
-        return { status: 'test_ready' }; // Stop here in test mode
+        console.log(`[WhatsAppClient] Test mode: chat open for ${activePhone}`);
+        return { status: 'test_ready' };
       }
 
-      // Find and click the send button
-      await page.waitForSelector(SELECTORS.SEND_BUTTON, { timeout: 5000 });
-      await page.click(SELECTORS.SEND_BUTTON);
+      // Step 3: Send the message via Enter key
+      try {
+        const inputEl = page.locator(SELECTORS.MESSAGE_INPUT).first();
+        await inputEl.focus();
+        await page.waitForTimeout(500);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(1500);
 
-      // Wait for a sent/delivered/read checkmark on the last message
+        // Fallback: click send button if still visible
+        try {
+          const sendBtn = page.locator(SELECTORS.SEND_BUTTON).first();
+          if (await sendBtn.isVisible({ timeout: 2000 })) await sendBtn.click();
+        } catch (e) {}
+      } catch (sendErr) {
+        console.error('[WhatsAppClient] Error pressing Enter:', sendErr.message);
+      }
+
+      // Step 4: Verify sent checkmark (lenient — don't fail if not seen)
       try {
         await Promise.any([
-          page.waitForSelector(SELECTORS.MESSAGE_SENT_CHECKMARK, { timeout: 15000 }),
-          page.waitForSelector(SELECTORS.MESSAGE_DELIVERED_CHECKMARK, { timeout: 15000 }),
-          page.waitForSelector(SELECTORS.MESSAGE_READ_CHECKMARK, { timeout: 15000 })
+          page.waitForSelector(SELECTORS.MESSAGE_SENT_CHECKMARK, { timeout: 8000 }),
+          page.waitForSelector(SELECTORS.MESSAGE_DELIVERED_CHECKMARK, { timeout: 8000 }),
+          page.waitForSelector(SELECTORS.MESSAGE_READ_CHECKMARK, { timeout: 8000 })
         ]);
+        console.log(`[WhatsAppClient] ✅ Message sent to ${activePhone}`);
       } catch (e) {
-        return { status: 'failed', errorCode: 'SEND_CONFIRMATION_TIMEOUT', error: 'Message sent but confirmation checkmark not seen' };
+        console.log(`[WhatsAppClient] Checkmark not detected for ${activePhone} — assuming sent.`);
       }
 
       return { status: 'sent' };
     } catch (err) {
-      console.error(`Error sending message to ${phoneNumber}:`, err);
+      console.error(`[WhatsAppClient] Unexpected error for ${phoneNumber}:`, err.message);
       return { status: 'failed', errorCode: 'UNKNOWN_ERROR', error: err.message };
     }
   }

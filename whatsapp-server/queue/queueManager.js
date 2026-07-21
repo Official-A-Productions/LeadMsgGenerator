@@ -87,7 +87,7 @@ class QueueManager {
 
   dequeueNext() {
     const queue = this._readQueue();
-    const jobIndex = queue.findIndex(j => ['QUEUED', 'RETRY_PENDING'].includes(j.status));
+    const jobIndex = queue.findIndex(j => ['QUEUED', 'PENDING', 'RETRY_PENDING'].includes(j.status));
     
     if (jobIndex >= 0) {
       const job = queue[jobIndex];

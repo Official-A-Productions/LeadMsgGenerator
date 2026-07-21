@@ -17,7 +17,8 @@ whatsappRouter.get('/status', async (req, res) => {
     processorRunning: queueProcessor.isRunning,
     isSleeping: queueProcessor.isSleeping,
     sleepUntil: queueProcessor.sleepUntil,
-    messagesSentInCurrentBatch: queueProcessor.messagesSentInCurrentBatch
+    messagesSentInCurrentBatch: queueProcessor.messagesSentInCurrentBatch,
+    currentActivity: queueProcessor.currentActivity
   });
 });
 
